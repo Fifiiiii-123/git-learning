@@ -1,8 +1,10 @@
 /*
  * ============================================================================
- *  文件：2-苏霏霏-3226006369-物理与光电工程学院-meArm代码.ino
- *  工程：meArm 控制代码（第一块 UNO R3 · 舵机主控）
+ *  文件：2-苏霏霏-3226006369-物理与光电工程学院-meArm代码.cpp
+ *  工程：meArm 控制代码（第一块 UNO R3 · 舵机主控，标准 C++ 源码格式）
  * ----------------------------------------------------------------------------
+ *  说明：独立 .cpp 源码（非 .ino 草稿），已显式包含 <Arduino.h>，
+ *        并在文件上部给出全部函数声明，可直接编译烧录到 Arduino UNO R3。
  *  整合自：
  *    Task1.ino  —— 任务一：摇杆基础控制 + 固定指令通信(O/S/H/L/C) + 多舵机协同(x,y,z)
  *    Task3.ino  —— 任务三：按键控制（循环夹取/录制/播放/回中）
@@ -28,6 +30,7 @@
  *    本地摇杆按键 D2=播放(仅MODE3调试) D3=回中；板载 LED D13=录制指示
  * ============================================================================
  */
+#include <Arduino.h>          // Arduino 核心库（.cpp 需显式包含）
 #include <Servo.h>            // Arduino 舵机驱动库（标准库）
 #include <math.h>             // 数学库：acos/atan2/sqrt/degrees 等
 
@@ -160,6 +163,52 @@ bool  hasRecord = false;                // 是否已有可播放的数据
 /* ---------------- 串口行缓冲 ---------------- */
 char lineBuf[32];
 int  lineLen = 0;
+
+/* ==================== 函数声明（.cpp 无 .ino 自动原型，显式声明保证任意调用顺序） ==================== */
+Point3D flashPoint(const Point3D *p);
+int clampVal(int v, int lo, int hi);
+void syncMove(int tBase, int tRArm, int tFArm, int tClaw, int stepMs);
+void moveTo(const Pose &p, int stepMs);
+void moveBase(int t);
+void moveRArm(int t);
+void moveFArm(int t);
+void moveClaw(int t);
+void clawOpen();
+void clawClose();
+void speedUp();
+void speedDown();
+void centerAll();
+void reportStatus();
+int axisDelta(int pin);
+void joystickControl();
+void setMode(TaskMode m);
+void pickAndPlace(const Pose &grab, const Pose &place, int lift = 15);
+void button1LoopPick();
+void button2Record();
+void captureFrame();
+void button3Play();
+void checkLocalButtons();
+void forwardKin(float t1Deg, float aDeg, float bDeg, float &mx, float &my, float &mz);
+void servoToGeo(float &t1, float &alpha, float &beta);
+void printPenPos();
+bool solveIK(float x, float y, float z, int &bAng, int &rAng, int &fAng);
+bool movePenTo(float x, float y, bool down);
+bool moveTo3D(float x, float y, float z);
+void drawLineTo(Point3D p0, Point3D p1);
+void demoDrawN();
+void drawLineDemo();
+void drawPolyline();
+void drawCurve();
+int readJoyAvg(int pin);
+void enterTeach();
+void joystickTeach();
+void teachOrRecord();
+int getNumberAfter(const char *s, int idx);
+void parseXYZ(const char *line);
+void handleCommand(const char *line);
+void readSerialLine();
+void setup();
+void loop();
 
 /* ==================== 基础工具函数 ==================== */
 
@@ -300,7 +349,7 @@ void setMode(TaskMode m){
 
 /* ==================== 任务三：夹取并放置 ====================
  * 完整动作序列：回待机→下降抓取→闭合→抬升→平移→下降→张开→回待机 */
-void pickAndPlace(const Pose &grab, const Pose &place, int lift = 15){
+void pickAndPlace(const Pose &grab, const Pose &place, int lift){
   moveTo(HOME, servoDelay);                      // 回待机
   int hiR = grab.r;                              // 高度位后臂角
   int hiF = grab.f - lift;                       // 高度位前臂角（上抬）
