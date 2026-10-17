@@ -62,8 +62,8 @@ TaskMode mode = DEFAULT_MODE;
 #define RARM_MAX  160         // 后臂角度上限（防堵转）
 #define FARM_MIN  30          // 前臂角度下限
 #define FARM_MAX  110         // 前臂角度上限（对齐 JoyFK_alpha2）
-#define CLAW_MIN  5           // 夹爪张开极限
-#define CLAW_MAX  130         // 夹爪闭合极限（对齐 JoyFK_alpha2）
+#define CLAW_MIN  5           // 夹爪张开极限（若夹爪不动/发热，用 'c' 测试指令重新标定此值）
+#define CLAW_MAX  130         // 夹爪闭合极限（对齐 JoyFK_alpha2；若舵机堵转发热说明该值过大，调小）
 #define CLAW_HOLD 120         // 夹笔保持角：任务五绘制/示教时夹爪闭合夹稳铅笔
 
 /* ==================== 点位定义（任务三，按实物标定！） ====================
@@ -174,6 +174,7 @@ int clampVal(int v, int lo, int hi);
 void syncMove(int tBase, int tRArm, int tFArm, int tClaw, int stepMs);
 void moveTo(const Pose &p, int stepMs);
 void centerAll();
+void clawOpenTest();
 int axisDelta(int pin, int center);
 void joystickControl();
 void setMode(TaskMode m);
@@ -251,6 +252,24 @@ void centerAll(){
   else               syncMove(90, 90, 90, 30, servoDelay);
 }
 
+/* ==================== 夹爪开合测试（串口调试指令 'c'，仅 MODE3） ====================
+ * 用途：单独验证夹爪舵机是否正常，排除其他关节干扰。
+ * 用法：烧录后用 USB 打开串口监视器（波特率 9600，右下角选“换行”），
+ *      在输入框输入小写字母 c 再点发送，观察夹爪是否 张开→闭合→张开。
+ * 判断：夹爪完全不动 → 硬件问题（信号线未接 D6、供电不足、舵机损坏或行程不够）；
+ *      夹爪会动 → 舵机正常，说明夹取流程中的问题在别处（点位标定等）。 */
+void clawOpenTest(){
+  Serial.println(F(">>> 夹爪测试：张开(GRIP_OPEN=5°)"));
+  syncMove(curBase, curRArm, curFArm, GRIP_OPEN, servoDelay);
+  delay(400);
+  Serial.println(F(">>> 夹爪测试：闭合(GRIP_CLOSE=130°)"));
+  syncMove(curBase, curRArm, curFArm, GRIP_CLOSE, servoDelay);
+  delay(400);
+  Serial.println(F(">>> 夹爪测试：张开(GRIP_OPEN=5°)"));
+  syncMove(curBase, curRArm, curFArm, GRIP_OPEN, servoDelay);
+  Serial.println(F(">>> 夹爪测试完成"));
+}
+
 /* ==================== 摇杆轴增量 ====================
  * 以校准中心为基准，死区内返回 0，越推越远返回越大（±1 ~ ±JOY_MAX_STEP） */
 int axisDelta(int pin, int center){
@@ -301,20 +320,25 @@ void setMode(TaskMode m){
 }
 
 /* ==================== 任务三：夹取并放置 ====================
- * 完整动作序列：回待机→下降抓取→闭合→抬升→平移→下降→张开→回待机 */
+ * 完整动作序列：回待机→下降抓取→闭合→抬升→平移→下降→张开→回待机
+ * 夹爪动作带串口打印：若机械臂其他关节都动而夹爪不动，且串口能看到
+ * “夹爪张开/闭合”提示，说明指令已发出，问题在夹爪舵机硬件（接线/供电/行程） */
 void pickAndPlace(const Pose &grab, const Pose &place, int lift){
   moveTo(HOME, servoDelay);                      // 回待机
   int hiR = grab.r;                              // 高度位后臂角
   int hiF = grab.f - lift;                       // 高度位前臂角（上抬）
+  Serial.println(F(">>> 夹爪张开(GRIP_OPEN)"));
   syncMove(grab.b, hiR, hiF, GRIP_OPEN, servoDelay);   // 到抓取点上方
   syncMove(grab.b, grab.r, grab.f, GRIP_OPEN, servoDelay); // 下降
   delay(300);
+  Serial.println(F(">>> 夹爪闭合(GRIP_CLOSE)"));
   syncMove(grab.b, grab.r, grab.f, GRIP_CLOSE, servoDelay); // 闭合夹爪
   delay(300);
   syncMove(grab.b, hiR, hiF, GRIP_CLOSE, servoDelay);   // 抬升
   syncMove(place.b, hiR, hiF, GRIP_CLOSE, servoDelay);  // 平移
   syncMove(place.b, place.r, place.f, GRIP_CLOSE, servoDelay); // 下降
   delay(300);
+  Serial.println(F(">>> 夹爪张开(GRIP_OPEN)"));
   syncMove(place.b, place.r, place.f, GRIP_OPEN, servoDelay); // 张开放下
   delay(300);
   moveTo(HOME, servoDelay);                      // 回待机
@@ -730,7 +754,8 @@ void handleCommand(const char *line){
         case '2': button2Record();   break;         // 录制开始/结束
         case '3': button3Play();     break;         // 播放
         case '4': centerAll();       break;         // 回中
-        default:  Serial.println(F("! 未知指令（MODE3：1循环夹取 2录制 3播放 4回中）"));
+        case 'c': clawOpenTest();    break;         // 串口调试：夹爪开合测试（按键板不会发）
+        default:  Serial.println(F("! 未知指令（MODE3：1循环夹取 2录制 3播放 4回中 | c夹爪测试）"));
       }
     } else {                                        /* 任务五指令 */
       switch (c){
