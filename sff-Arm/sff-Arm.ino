@@ -406,11 +406,14 @@ void button3Play(){
 }
 
 /* ==================== 本地按键检测（任务三调试备用，仅 MODE3 有效） ====================
- * D2=左摇杆按键=播放   D3=右摇杆按键=回中（防抖 300ms） */
+ * D2=左摇杆按键=播放   D3=右摇杆按键=回中（防抖 300ms）
+ * 注意：录制中屏蔽本地按键——推摇杆操控时很容易压到摇杆下方的按键，
+ * 若在录制中触发“回中/播放”会打断录制（表现为“录制时一直回中”） */
 void checkLocalButtons(){
   static unsigned long lastSw1 = 0, lastSw2 = 0;
   unsigned long now = millis();
   if (mode != MODE3) return;                     // 任务五模式下不启用，避免干扰绘制
+  if (recording) return;                         // 录制中屏蔽本地按键，防止误触打断录制
   if (digitalRead(PIN_SW1) == LOW && now - lastSw1 > 300){ lastSw1 = now; button3Play(); }
   if (digitalRead(PIN_SW2) == LOW && now - lastSw2 > 300){ lastSw2 = now; centerAll(); }
 }
